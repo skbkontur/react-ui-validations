@@ -64,7 +64,10 @@ function validate(data: ContactInfo): ContactInfoValidationInfo {
         result.email = { message: 'Почта указана неверно' };
     }
 
-    if (data.phone !== '' && !/^[\s\d\-\+\(\)]*$/.test(data.phone)) {
+    if (data.phone === '') {
+        result.phone = { message: 'Укажешь телефон — получишь супер силу', level: 'warning' };
+    }
+    else if (data.phone !== '' && !/^[\s\d\-\+\(\)]*$/.test(data.phone)) {
         result.phone = { message: 'Телефон должен состоять только из цифр, пробелов и знаков -,+,(,)' };
     }
     return result;

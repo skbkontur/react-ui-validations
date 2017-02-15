@@ -72,6 +72,7 @@ export class ValidationWrapperV1 extends React.Component {
                     {
                         error: Boolean(validationInfo),
                         behaviour: (validationInfo && validationInfo.type) || 'lostfocus',
+                        level: (validationInfo && validationInfo.level) || 'error',
                         message: (validationInfo && validationInfo.message),
                     },
                 ]}>
