@@ -9,6 +9,7 @@ require('smoothscroll-polyfill').polyfill();
 export type Validation = {
     error: boolean;
     behaviour: 'immediate' | 'lostfocus' | 'submit';
+    level?: 'error' | 'warning';
 };
 
 export interface IValidationContextSettings {
@@ -260,7 +261,6 @@ export default class ValidationWrapper extends React.Component {
     render(): React.Element<*> {
         const { children, validations, errorMessage } = this.props;
         const validation = validations.find((x, i) => this.isError(x, i));
-
         const clonedChild =
             children
                 ? React.cloneElement(
@@ -271,7 +271,8 @@ export default class ValidationWrapper extends React.Component {
                             }
                             this.child = x;
                         },
-                        error: this.isChanging ? false : Boolean(validation && validation.error),
+                        [validation && validation.level || 'error']:
+                            this.isChanging ? false : Boolean(validation && validation.error),
                         onBlur: () => {
                             this.handleBlur();
                             if (children && children.props && children.props.onBlur) {

@@ -53,6 +53,7 @@ export class ValidationContainer extends React.Component {
 export type ValidationInfo = {
     type?: 'immediate' | 'lostfocus' | 'submit';
     message: string;
+    level?: 'error' | 'warning';
 };
 
 type ValidationWrapperV1Props = {
@@ -74,6 +75,7 @@ export class ValidationWrapperV1 extends React.Component {
                     {
                         error: Boolean(validationInfo),
                         behaviour: (validationInfo && validationInfo.type) || 'lostfocus',
+                        level: (validationInfo && validationInfo.level) || 'error',
                         message: (validationInfo && validationInfo.message),
                     },
                 ]}>
