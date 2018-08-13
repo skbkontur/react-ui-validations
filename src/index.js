@@ -44,15 +44,35 @@ export type ValidationInfo = {
     message: string,
 };
 
+export const ValidationNotChanged: ValidationInfo = {
+    message: null,
+};
+
 type ValidationWrapperV1Props = {
     children?: React.Element<any>,
     validationInfo: ?ValidationInfo,
     renderMessage?: RenderErrorMessage,
 };
 
-export class ValidationWrapperV1 extends React.Component<ValidationWrapperV1Props> {
+type ValidationWrapperV1State = {
+    validationInfo: ?ValidationInfo,
+};
+
+export class ValidationWrapperV1 extends React.Component<ValidationWrapperV1Props, ValidationWrapperV1State> {
+    constructor(props: ValidationWrapperV1Props, context: *) {
+        super(props, context);
+        this.state = { validationInfo: props.validationInfo };
+    }
+
+    componentWillReceiveProps(nextProps: ValidationWrapperV1Props) {
+        if (nextProps.validationInfo !== ValidationNotChanged) {
+            this.setState({ validationInfo: nextProps.validationInfo });
+        }
+    }
+
     render(): React.Node {
-        const { children, validationInfo, renderMessage } = this.props;
+        const { children, renderMessage } = this.props;
+        const { validationInfo } = this.state;
 
         return (
             <ValidationWrapper

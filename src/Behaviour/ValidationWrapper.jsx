@@ -14,7 +14,7 @@ export type Validation = {
     error: boolean,
     level: "error" | "warning",
     behaviour: "immediate" | "lostfocus" | "submit",
-    message: React.Node,
+    message: React.Node | Promise<React.Node>,
 };
 
 export interface IValidationContextSettings {
@@ -23,10 +23,15 @@ export interface IValidationContextSettings {
 
 export interface IValidationContext {
     register(wrapper: ValidationWrapper): void;
+
     unregister(wrapper: ValidationWrapper): void;
+
     instanceProcessBlur(wrapper: ValidationWrapper): void;
+
     onValidationUpdated(wrapper: ValidationWrapper, isValid: boolean): void;
+
     getSettings(): IValidationContextSettings;
+
     isAnyWrapperInChangingMode(): boolean;
 }
 
@@ -43,32 +48,48 @@ type ValidationWrapperProps = {
 };
 
 type ValidationState = {
-    visible?: boolean,
+    id: number,
+    waitingForPromise: boolean,
+    visible: boolean,
+    cancellation: Cancellation,
+    validation: Validation,
+    promise: Promise,
+    message: React.ReactNode,
+    ready: boolean,
 };
 
 type ValidationWrapperState = {
-    validationStates: ValidationState[],
+    validations: ValidationState[],
 };
+
+class Cancellation {
+    cancelled: boolean = false;
+
+    cancel() {
+        this.cancelled = true;
+    }
+
+    isCancelled(): boolean {
+        return this.cancelled;
+    }
+}
 
 export default class ValidationWrapper extends React.Component<ValidationWrapperProps, ValidationWrapperState> {
     state: ValidationWrapperState = {
-        validationStates: [],
+        validations: [],
     };
     context: {
         validationContext: IValidationContext,
-    };
-    refs: {
-        errorMessage: ?mixed,
     };
 
     static contextTypes = {
         validationContext: PropTypes.any,
     };
 
+    static globalId = 0;
+
     child: ?React.Component<any, any>;
     isChanging: boolean = false;
-
-    _scrollTimer = null;
 
     componentWillMount() {
         this.syncWithState(this.props);
@@ -98,94 +119,120 @@ export default class ValidationWrapper extends React.Component<ValidationWrapper
     }
 
     syncWithState(props: ValidationWrapperProps) {
-        const nextValidationStates = props.validations.map(x => this.createState(x));
+        for (const validation of this.state.validations) {
+            validation.cancellation.cancel();
+        }
+
         this.setState({
-            validationStates: nextValidationStates,
+            validations: props.validations.map(validation => {
+                const cancellation = new Cancellation();
+                const id = ++ValidationWrapper.globalId;
+                return {
+                    id: id,
+                    validation: validation,
+                    visible: false,
+                    message: null,
+                    ready: false,
+                    cancellation: cancellation,
+                    waitingForPromise: false,
+                    promise: this.createPromise(id, validation, cancellation),
+                };
+            }),
         });
-        const isValid = !nextValidationStates.find(x => x.visible);
-        this.context.validationContext.onValidationUpdated(this, isValid);
     }
 
-    createState(validation: Validation): ValidationState {
-        if (validation.behaviour === "immediate") {
-            return {};
-        } else if (validation.behaviour === "lostfocus") {
-            if (this.context.validationContext.isAnyWrapperInChangingMode()) {
-                return { visible: false };
+    createPromise(id: number, validation: Validation, cancellation: Cancellation): Promise<void> {
+        return Promise.resolve(validation.message).then(message => {
+            if (cancellation.isCancelled()) {
+                return;
             }
+            this.setState(
+                state => {
+                    const validationWasVisible = state.validations.some(x => x.visible);
+                    return {
+                        validations: state.validations.map(x => {
+                            return x.id !== id
+                                ? x
+                                : {
+                                      ...x,
+                                      message: message,
+                                      ready: true,
+                                      visible: this.isVisible(
+                                          x.validation.behaviour,
+                                          x.waitingForPromise,
+                                          validationWasVisible
+                                      ),
+                                  };
+                        }),
+                    };
+                },
+                () => this.fireValidationUpdated()
+            );
+        });
+    }
 
-            return { visible: true };
-        } else if (validation.behaviour === "submit") {
-            return { visible: false };
+    isVisible(
+        behaviour: "immediate" | "lostfocus" | "submit",
+        waitingForPromise: boolean,
+        validationWasVisible: boolean
+    ): boolean {
+        switch (behaviour) {
+            case "immediate":
+                return true;
+            case "lostfocus": {
+                const nothingChanging = !this.context.validationContext.isAnyWrapperInChangingMode();
+                return !this.isChanging && (waitingForPromise || validationWasVisible || nothingChanging);
+            }
+            case "submit":
+                return false;
+            default:
+                throw new Error(`Unknown behaviour: ${behaviour}`);
         }
-        throw new Error(`Unknown behaviour: ${validation.behaviour}`);
     }
 
     emulateBlur() {
-        const { validations } = this.props;
-        validations.forEach((x, i) => this.processBlur(x, this.state.validationStates[i], i));
-        this.isChanging = false;
+        this.processBlur();
     }
 
     handleBlur() {
-        const { validations } = this.props;
-        validations.forEach((x, i) => this.processBlur(x, this.state.validationStates[i], i));
+        this.processBlur();
         this.context.validationContext.instanceProcessBlur(this);
-        this.isChanging = false;
         this.setState({});
     }
 
     async processSubmit(): Promise<void> {
         this.isChanging = false;
-        const { validations } = this.props;
-        await Promise.all(
-            validations.map((x, i) => this.processValidationSubmit(x, this.state.validationStates[i], i))
-        );
-    }
-
-    processValidationSubmit(validation: Validation, validationState: ValidationState, index: number): Promise<void> {
-        return new Promise(resolve => {
-            if (validation.behaviour !== "immediate") {
-                this.setState(
-                    {
-                        validationStates: [
-                            ...this.state.validationStates.slice(0, index),
-                            { ...validationState, visible: true },
-                            ...this.state.validationStates.slice(index + 1),
-                        ],
-                    },
-                    resolve
-                );
-            } else {
-                resolve();
-            }
+        await Promise.all(this.state.validations.map(x => x.promise));
+        await new Promise(resolve => {
+            this.setState(
+                state => ({ validations: state.validations.map(x => ({ ...x, visible: true })) }),
+                () => resolve()
+            );
         });
     }
 
-    processBlur(validation: Validation, validationState: ValidationState, index: number) {
+    processBlur() {
         this.isChanging = false;
-        if (validation.behaviour === "lostfocus") {
-            let { validationStates } = this.state;
-            if (validation.error && (!validationStates[index] || validationStates[index].visible === false)) {
-                validationStates = [
-                    ...validationStates.slice(0, index),
-                    { ...validationState, visible: true },
-                    ...validationStates.slice(index + 1),
-                ];
-                this.setState({ validationStates: validationStates });
-                const isValid = !validationStates.find(x => x.visible);
-                this.context.validationContext.onValidationUpdated(this, isValid);
-            } else if (!validation.error && (!validationStates[index] || validationStates[index].visible === true)) {
-                validationStates = [
-                    ...validationStates.slice(0, index),
-                    { ...validationState, visible: false },
-                    ...validationStates.slice(index + 1),
-                ];
-                this.setState({ validationStates: validationStates });
-                const isValid = !validationStates.find(x => x.visible);
-                this.context.validationContext.onValidationUpdated(this, isValid);
-            }
-        }
+
+        this.setState(
+            state => ({
+                validations: state.validations.map(x => {
+                    if (x.validation.behaviour === "lostfocus") {
+                        if (x.ready) {
+                            return { ...x, visible: x.validation.error };
+                        }
+                        return { ...x, waitingForPromise: x.validation.error };
+                    }
+                    return x;
+                }),
+            }),
+            () => this.fireValidationUpdated
+        );
+    }
+
+    fireValidationUpdated() {
+        const isValid = !this.state.validations.some(x => x.visible);
+        this.context.validationContext.onValidationUpdated(this, isValid);
     }
 
     async focus(): Promise<void> {
@@ -217,30 +264,28 @@ export default class ValidationWrapper extends React.Component<ValidationWrapper
         return null;
     }
 
-    isErrorOrWarning(validation: Validation, index: number): boolean {
-        if (validation.behaviour === "immediate") {
-            return validation.error;
-        }
-        return Boolean(validation.error && this.state.validationStates[index].visible);
+    isErrorOrWarning(validationState: ValidationState): boolean {
+        return Boolean(validationState.validation.error && validationState.visible);
     }
 
-    isError(validation: Validation, index: number): boolean {
-        if (validation.behaviour === "immediate") {
-            return validation.error && validation.level === "error";
-        }
-        return Boolean(validation.error && validation.level === "error" && this.state.validationStates[index].visible);
+    isError(validationState: ValidationState): boolean {
+        const validation = validationState.validation;
+        return Boolean(validation.error && validation.level === "error" && validationState.visible);
     }
 
     hasError(): boolean {
-        const { validations } = this.props;
-        const validation = validations.find((x, i) => this.isError(x, i));
-        return Boolean(validation && validation.error);
+        return this.state.validations.some(x => this.isError(x));
     }
 
     render(): React.Node {
-        const { children, validations, errorMessage } = this.props;
-        const validation = validations.find((x, i) => this.isErrorOrWarning(x, i));
-
+        const { children } = this.props;
+        const validationState = this.state.validations.find(x => this.isErrorOrWarning(x));
+        const validation = validationState
+            ? {
+                  ...validationState.validation,
+                  message: validationState.message,
+              }
+            : null;
         const clonedChild: React.Element<any> = children ? (
             React.cloneElement(children, {
                 ref: x => {
@@ -291,10 +336,7 @@ export default class ValidationWrapper extends React.Component<ValidationWrapper
         ) : (
             <span />
         );
-        const childWithError = React.cloneElement(
-            errorMessage(clonedChild, Boolean(validation && validation.error), validation),
-            { ref: "errorMessage" }
-        );
-        return childWithError;
+        const hasError = Boolean(validation && validation.error);
+        return this.props.errorMessage(clonedChild, hasError, validation);
     }
 }

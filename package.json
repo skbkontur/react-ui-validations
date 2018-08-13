@@ -8,7 +8,7 @@
         "prepare-packages": "node scripts/prepare-packages.js",
         "lint": "eslint src docs stories --ext .js,.jsx",
         "flow.check": "flow check",
-        "storybook": "cross-env NODE_ENV=storybook start-storybook -p 8081 -c .storybook"
+        "storybook": "cross-env NODE_ENV=storybook start-storybook -p 8008 -c .storybook"
     },
     "main": "./index.js",
     "types": "./index.d.ts",

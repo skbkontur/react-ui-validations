@@ -183,7 +183,7 @@ class Example6 extends React.Component {
     validateValue1() {
         const { value1 } = this.state;
         if (value1 === "") {
-            return { message: "Должно быть не пусто", type: "submit" };
+            return { message: <span>Должно быть не пусто Должно быть<br/>не пусто Должно быть не пусто Должно<br/>быть не пусто Должно быть не</span>, type: "submit" };
         } else if (value1.split(" ").length !== 2) {
             return { message: <span>Значение должно состоять из двух слов.</span>, type: "lostfocus" };
         }
