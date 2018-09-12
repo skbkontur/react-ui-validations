@@ -195,19 +195,17 @@ export default class ValidationWrapper extends React.Component<ValidationWrapper
     }
 
     async focus(): Promise<void> {
-        if (this.child) {
-            const childDomElement = ReactDom.findDOMNode(this.child);
-            if (childDomElement != null && childDomElement instanceof HTMLElement) {
-                await smoothScrollIntoView(
-                    childDomElement,
-                    this.context.validationContext.getSettings().scroll.verticalOffset || 50
-                );
-                if (this.child != null && typeof this.child.focus === "function") {
-                    this.child.focus();
-                }
+        const domElement = ReactDom.findDOMNode(this);
+        if (domElement != null && domElement instanceof HTMLElement) {
+            await smoothScrollIntoView(
+                domElement,
+                this.context.validationContext.getSettings().scroll.verticalOffset || 50
+            );
+            if (this.child != null && typeof this.child.focus === "function") {
+                this.child.focus();
             }
-            this.isChanging = false;
         }
+        this.isChanging = false;
     }
 
     getControlPosition(): ?{ x: number, y: number } {
