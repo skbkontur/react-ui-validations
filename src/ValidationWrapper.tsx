@@ -30,8 +30,13 @@ export type RenderErrorMessage = (
     validation: Nullable<Validation>,
 ) => React.ReactElement<any>;
 
+export interface ValidationXxx {
+    invalid: boolean;
+    validating: boolean;
+}
+
 export interface ValidationWrapperProps {
-    children?: React.ReactElement<any>;
+    children?: React.ReactElement<any> | ((state: ValidationXxx) => React.ReactElement<any>);
     validations: Validation[];
     errorMessage: RenderErrorMessage;
 }
