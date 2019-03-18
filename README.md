@@ -1,5 +1,7 @@
 # react-ui-validations
 
+## Разработка библиотеки переехала в другой репозиторий [skbkontur/retail-ui](https://github.com/skbkontur/retail-ui/tree/master/packages/react-ui-validations)
+
 [![Travis](https://img.shields.io/travis/skbkontur/react-ui-validations.svg?maxAge=300&style=flat-square)](https://travis-ci.org/skbkontur/react-ui-validations) [![npm](https://img.shields.io/npm/v/react-ui-validations.svg?maxAge=300&style=flat-square)](https://www.npmjs.com/package/react-ui-validations)
 
 Набор компонентов, реализующих поведение [валидаций по контур-гайдам](https://guides.kontur.ru/principles/validation/).
